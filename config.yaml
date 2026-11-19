@@ -1,0 +1,135 @@
+# stream-clipper configuration. Every value here can be left as-is to start.
+
+paths:
+  work: work        # per-stream analysis data (audio, chat, candidates, selection)
+  output: output    # finished clips land here
+  music: music      # background music library
+
+download:
+  # Highest video height fetched for the clip sections only (the full VOD is never downloaded).
+  max_height: 1080
+  cookies_from_browser: null   # e.g. "chrome" for sub-only VODs
+
+whisper:
+  model: large-v3          # GPU model
+  cpu_model: small         # used automatically if CUDA is unavailable
+  device: auto             # auto | cuda | cpu
+  language: null           # null = auto-detect the spoken language
+  caption_language: english  # english   = translate other languages (Telugu, Hindi...) to English
+                             # romanized = keep the language, written in English letters (nenu, enti ra)
+                             # original  = original script
+  vad_threshold: 0.3       # lower = catches quieter voices (Discord) in captions
+  pad_seconds: 4           # extra audio transcribed around each candidate
+
+highlights:
+  max_candidates: auto     # moments handed to the ranker; auto = ~1 per minutes_per_candidate
+  minutes_per_candidate: 4
+  candidate_cap: 60
+  min_score: 0.3           # weakest peak still considered a candidate
+  clips: auto              # signals-only mode: auto = every candidate scoring >= auto_clip_score
+  auto_clip_score: 0.8
+  pre_roll: 20             # seconds before the peak (setup of the moment)
+  post_roll: 10            # seconds after the peak (reaction)
+  min_clip: 12
+  max_clip: 60
+  min_gap: 45              # minimum seconds between two candidate peaks
+  chat_delay: 6            # chat reacts a few seconds after the moment happens
+  weights:
+    chat: 1.0              # chat messages/second vs. the stream's own baseline
+    keywords: 0.6          # hype terms / emotes in chat
+    audio: 0.7             # loudness spikes (screams, explosions, hype)
+    replay: 0.8            # YouTube "most replayed" heatmap, when available
+  hype_terms: [LUL, LULW, KEKW, OMEGALUL, LMAO, LOL, POG, POGGERS, PogChamp, PogU, Pog,
+               W, WW, "clip it", clip, "!clip", HOLY, WTF, "no way", NOWAY, monkaS,
+               Sadge, EZ, GG, "?????", "!!!", 5Head, Kreygasm, ICANT, Aware, xdd]
+
+render:
+  width: 1080             # 1440 x 2560 makes YouTube serve Shorts in a sharper codec (bigger files, slower render)
+  height: 1920
+  max_fps: 60              # keeps 60 fps streams at 60 fps
+  sharpen: true            # light sharpening when a small webcam / 720p source is enlarged
+  x264_preset: slow        # CPU encoder only; NVENC uses its highest-quality preset
+  layout: auto             # auto | split | blur | crop
+                           #   auto  = per clip: webcam found -> split, full-screen camera -> crop on the face,
+                           #           no webcam -> blur
+                           #   split = webcam panel + gameplay panel (the classic gaming Shorts/Reels look)
+  fg_zoom: 1.3             # blur layout: how much the gameplay is zoomed (1.0 = full width)
+  facecam:
+    mode: auto             # auto (detect the webcam in every clip) | manual (use the box below) | off
+    position: top          # webcam panel on top or bottom
+    height_share: 0.38     # share of the vertical frame given to the webcam panel
+    zoom: 1.15             # >1 zooms into the face inside the webcam
+    inset: 0.03            # trims the webcam's frame/border so no gameplay sliver shows
+    game_zoom: 1.0         # >1 zooms into the centre of the gameplay
+    divider: 6             # px line between panels (0 = none)
+    divider_color: white
+    detector: auto         # auto (YuNet DNN, downloaded once; falls back to haar) | haar
+    samples: 24            # frames sampled per clip for detection
+    min_presence: 0.3      # face must be in this share of sampled frames
+    max_reach: 4.0         # how far (in face widths) to look for the webcam border
+    # manual box, as fractions of the source frame (e.g. bottom-right cam: x 0.75, y 0.72):
+    x: 0.0
+    y: 0.0
+    w: 0.25
+    h: 0.28
+  encoder: auto            # auto (NVENC, falls back to x264) | nvenc | x264
+  crf: 18                  # lower = higher quality / bigger file
+  captions:
+    enabled: true
+    font: Arial Black
+    size: 82
+    words_per_line: 3
+    uppercase: true
+    color: "&H00FFFFFF"     # ASS colours are &HAABBGGRR
+    highlight: "&H0000E5FF" # yellow
+    outline: 7
+    position: 0.70          # vertical position of captions (0 = top, 1 = bottom)
+  title:
+    enabled: true
+    seconds: 3.5
+    size: 72
+    color: "&H00FFFFFF"
+    box: "&H00202020"
+
+live:
+  segment_seconds: 30      # recording piece length
+  poll_seconds: 10         # how often new audio/chat is checked
+  warmup_minutes: 4        # stream time needed before the baseline is trusted
+  candidate_score: 0.8     # peaks at least this strong are examined (transcribed)
+  min_score: 1.2           # --agent none: candidates at least this strong become clips
+  agent_batch_size: 3      # --agent claude: judge when this many moments are waiting...
+  agent_max_wait_minutes: 5  # ...or when the oldest has waited this long
+  wait_for_live: true      # start before the stream: keep checking until the channel is live
+  check_every_minutes: 2
+  end_after_offline_minutes: 5   # stream gone this long = finished
+  keep_recording: true     # save the whole stream as work/<session>/recording.mp4 at the end
+
+music:
+  enabled: true
+  auto_fetch: true         # download free CC-BY tracks (Kevin MacLeod) on first use
+  level_lufs: -30          # music loudness (voices are normalised to -15 LUFS, so music sits ~15 dB under)
+  duck_gain: 0.3           # music drops to 30% while anyone talks (streamer or Discord)
+  duck: true               # extra ducking on any voice energy that wasn't transcribed
+
+agents:
+  gemini_model: null       # --agent gemini: Gemini CLI model (null = its default, e.g. gemini-2.5-pro)
+
+publish:                   # posting to YouTube Shorts / Instagram Reels (use --publish on live/run/render)
+  mode: auto               # auto = post as clips are made | review = wait for `publish approve <name|all>`
+  min_minutes_between_posts: 30   # per platform; avoids flooding followers (and spam flags) during a stream
+  max_per_hour: 2          # per platform
+  finish_queue_after_stream: true # keep posting what's queued after the stream ends (Ctrl+C to stop)
+  description: "Clipped live from {stream_url}"
+  hashtags: ["#gaming", "#twitch", "#streamer"]
+  youtube:
+    enabled: true         # turn on after `publish setup youtube`
+    privacy: public        # public | unlisted | private
+    category_id: 20        # 20 = Gaming
+    notify_subscribers: true
+    max_per_day: 48        # the API allows 100 uploads/day per project
+    hashtags: ["#shorts"]
+  instagram:
+    enabled: true          # turn on after `publish setup instagram`
+    max_per_day: 48        # Instagram allows up to 100 API posts per 24 h
+    api_version: v25.0
+    hashtags: ["#reels", "#gamingreels"]
